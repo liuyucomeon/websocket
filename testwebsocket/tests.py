@@ -1,6 +1,8 @@
 import redis
 from gevent import pywsgi, monkey
+from geventwebsocket import WebSocketError
 from geventwebsocket.handler import WebSocketHandler
+import redis.exceptions
 
 monkey.patch_all()
 
@@ -10,14 +12,19 @@ monkey.patch_all()
 class WebSocketApp(object):
     def __call__(self, env, start_response):
         ws = env['wsgi.websocket']
-        rc = redis.Redis(host='127.0.0.1')
-        ps = rc.pubsub()
+        redis_cli = redis.Redis(host='127.0.0.1')
+        pubsub = redis_cli.pubsub()
         channel = ws.receive()
-        ps.subscribe([channel])
-        for item in ps.listen():
+        pubsub.subscribe([channel])
+
+        for item in pubsub.listen():
             if item['type'] == 'message':
-                ws.send(item['data'].decode())
+                try:
+                    ws.send(item['data'].decode())
+                except WebSocketError:
+                    # 取消redis订阅
+                    pubsub.unsubscribe([channel])
 
 
-server = pywsgi.WSGIServer(('', 8888), WebSocketApp(), handler_class=WebSocketHandler)
+server = pywsgi.WSGIServer(('', 8880), WebSocketApp(), handler_class=WebSocketHandler)
 server.serve_forever()
