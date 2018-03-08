@@ -12,7 +12,8 @@ monkey.patch_all()
 class WebSocketApp(object):
     def __call__(self, env, start_response):
         ws = env['wsgi.websocket']
-        redis_cli = redis.Redis(host='127.0.0.1')
+        pool = redis.ConnectionPool(host='127.0.0.1', port=6379, db=0)
+        redis_cli = redis.Redis(connection_pool=pool)
         pubsub = redis_cli.pubsub()
         channel = ws.receive()
         pubsub.subscribe([channel])
